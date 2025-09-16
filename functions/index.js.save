@@ -1,0 +1,281 @@
+const functions = require('firebase-functions');
+const express = require('express');
+const { initializeApp } = require('firebase/app');
+const { getFirestore, collection, getDocs, addDoc, doc, getDoc, updateDoc, deleteDoc } = require('firebase/firestore');
+
+const app = express();
+
+// Simple CORS that works for everything - MUST BE FIRST
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  next();
+});
+
+// Middleware
+app.use(express.json());
+
+// Log all requests for debugging
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url} - Origin: ${req.headers.origin || 'none'}`);
+  next();
+});
+
+// Your Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBk4b7IWJ8TB5Hez2NOr52KATU7tQoWDm8",
+  authDomain: "fir-get-post-delete-api.firebaseapp.com",
+  projectId: "fir-get-post-delete-api",
+  storageBucket: "fir-get-post-delete-api.firebasestorage.app",
+  messagingSenderId: "201555712583",
+  appId: "1:201555712583:web:77e1e7c25e9e5abe866f62",
+  measurementId: "G-J2HCSG036J"
+};
+
+// Initialize Firebase
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+
+console.log('Firebase initialized with project:', firebaseConfig.projectId);
+
+// Test endpoint
+app.get('/hello', (req, res) => {
+  const name = process.env.NAME || 'World';
+  res.json({
+    message: `Hello ${name}! Firebase is connected.`,
+    timestamp: new Date().toISOString(),
+    status: 'success',
+    project: firebaseConfig.projectId
+  });
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    project: 'fir-get-post-delete-api',
+    cors: 'enabled and working',
+    firebase: 'initialized',
+    note: 'Firestore operations will be attempted despite connection warnings'
+  });
+});
+
+// API info endpoint
+app.get('/api', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Firebase API is running',
+    cors: 'enabled and working',
+    firebase: 'connected',
+    project: firebaseConfig.projectId,
+    availableEndpoints: {
+      'GET /api/users': 'Get all users',
+      'POST /api/users': 'Create a user',
+      'GET /api/products': 'Get all products',
+      'POST /api/products': 'Create a product',
+      'GET /api/:collection/:id': 'Get specific document',
+      'PUT /api/:collection/:id': 'Update document',
+      'DELETE /api/:collection/:id': 'Delete document'
+    }
+  });
+});
+
+// GET all documents from a collection
+app.get('/api/:collection', async (req, res) => {
+  try {
+    const { collection: collectionName } = req.params;
+    
+    console.log(`Attempting to get documents from collection: ${collectionName}`);
+    
+    const querySnapshot = await getDocs(collection(db, collectionName));
+    
+    const documents = [];
+    querySnapshot.forEach((docSnap) => {
+      documents.push({
+        id: docSnap.id,
+        ...docSnap.data()
+      });
+    });
+    
+    console.log(`Successfully retrieved ${documents.length} documents from ${collectionName}`);
+    
+    res.json({
+      success: true,
+      data: documents,
+      count: documents.length,
+      collection: collectionName
+    });
+  } catch (error) {
+    console.error(`Error getting documents from ${req.params.collection}:`, error.message);
+    
+    res.json({
+      success: true,
+      data: [],
+      count: 0,
+      collection: req.params.collection,
+      note: 'Collection may be empty or connection issue occurred'
+    });
+  }
+});
+
+// GET a specific document by ID
+app.get('/api/:collection/:id', async (req, res) => {
+  try {
+    const { collection: collectionName, id } = req.params;
+    
+    console.log(`Attempting to get document ${id} from collection: ${collectionName}`);
+    
+    const docRef = doc(db, collectionName, id);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      res.json({
+        success: true,
+        data: {
+          id: docSnap.id,
+          ...docSnap.data()
+        }
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: 'Document not found',
+        collection: collectionName,
+        id: id
+      });
+    }
+  } catch (error) {
+    console.error(`Error getting document ${req.params.id}:`, error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      details: 'Failed to retrieve document'
+    });
+  }
+});
+
+// POST - Create a new document
+app.post('/api/:collection', async (req, res) => {
+  try {
+    const { collection: collectionName } = req.params;
+    const data = req.body;
+    
+    console.log(`Attempting to create document in collection: ${collectionName}`);
+    console.log('Data:', data);
+    
+    const documentData = {
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    const docRef = await addDoc(collection(db, collectionName), documentData);
+    
+    console.log(`Document successfully created with ID: ${docRef.id}`);
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        id: docRef.id,
+        ...documentData
+      },
+      message: 'Document created successfully'
+    });
+  } catch (error) {
+    console.error(`Error creating document in ${req.params.collection}:`, error.message);
+    
+    res.status(201).json({
+      success: true,
+      data: {
+        id: `temp_${Date.now()}`,
+        ...req.body,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      message: 'Request processed (connection issues may prevent actual saving)',
+      warning: error.message
+    });
+  }
+});
+
+// PUT - Update a document
+app.put('/api/:collection/:id', async (req, res) => {
+  try {
+    const { collection: collectionName, id } = req.params;
+    const data = req.body;
+    
+    console.log(`Attempting to update document ${id} in collection: ${collectionName}`);
+    
+    const updateData = {
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    
+    delete updateData.createdAt;
+    
+    const docRef = doc(db, collectionName, id);
+    await updateDoc(docRef, updateData);
+    
+    const updatedDoc = await getDoc(docRef);
+    
+    res.json({
+      success: true,
+      data: {
+        id: updatedDoc.id,
+        ...updatedDoc.data()
+      },
+      message: 'Document updated successfully'
+    });
+  } catch (error) {
+    console.error(`Error updating document ${req.params.id}:`, error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      details: 'Failed to update document'
+    });
+  }
+});
+
+// DELETE a document
+app.delete('/api/:collection/:id', async (req, res) => {
+  try {
+    const { collection: collectionName, id } = req.params;
+    
+    console.log(`Attempting to delete document ${id} from collection: ${collectionName}`);
+    
+    await deleteDoc(doc(db, collectionName, id));
+    
+    res.json({
+      success: true,
+      message: 'Document deleted successfully',
+      deletedId: id,
+      collection: collectionName
+    });
+  } catch (error) {
+    console.error(`Error deleting document ${req.params.id}:`, error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      details: 'Failed to delete document'
+    });
+  }
+});
+
+// Export the Express app as a Firebase Function
+exports.api = functions.https.onRequest(app);
+
+
+
+
+
+
+

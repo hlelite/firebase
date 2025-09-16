@@ -1,20 +1,28 @@
 {
-  "name": "node-express-api",
-  "description": "Simple api sample in Node",
+  "name": "firebase-express-api",
   "version": "1.0.0",
-  "private": true,
-  "main": "index.js",
+  "description": "Express API with Firebase Firestore",
   "type": "module",
+  "main": "index.js",
   "scripts": {
-    "dev": "nodemon index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
-  "author": "Google LLC",
-  "license": "Apache-2.0",
   "dependencies": {
-    "express": "^4.21.2"
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "firebase": "^12.2.1",
+    "firebase-functions": "^6.4.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
-  }
+    "nodemon": "^3.0.2"
+  },
+  "keywords": [
+    "firebase",
+    "express",
+    "api",
+    "firestore"
+  ],
+  "author": "",
+  "license": "ISC"
 }
